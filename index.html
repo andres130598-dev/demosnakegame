@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snake Clásico</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f4ef;--fg:#1d1d1b;--card:#fff;--line:#d6d6cc;--accent:#2f4f1f;--lcd:#9bb77a;--ink:#1b2a0f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161714;--fg:#ececE4;--card:#22241f;--line:#3a3d34;--accent:#9bb77a}}
+:root[data-theme="dark"]{--bg:#161714;--fg:#ececE4;--card:#22241f;--line:#3a3d34;--accent:#9bb77a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center;padding:16px}
+main{width:100%;max-width:380px}
+h1{font-size:20px;margin:0 0 12px;text-align:center;letter-spacing:.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+label{display:block;font-size:14px;margin:10px 0 4px}
+input[type=text],input[type=tel]{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:var(--bg);color:var(--fg)}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:12px}
+button{font:inherit;cursor:pointer}
+.btn{width:100%;margin-top:14px;padding:13px;border:0;border-radius:10px;background:var(--ink);color:#c8e3a4;font-weight:600}
+.err{color:#c0392b;font-size:13px;min-height:18px;margin-top:8px}
+.phone{background:#2b2b2b;border-radius:28px;padding:16px;border:4px solid #444}
+.lcd{background:var(--lcd);border-radius:6px;padding:8px;box-shadow:inset 0 0 8px rgba(0,0,0,.35)}
+.hud{display:flex;justify-content:space-between;font:700 13px ui-monospace,Menlo,monospace;color:var(--ink);padding:0 2px 6px}
+canvas{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated;border:2px solid var(--ink)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;max-width:210px;margin-inline:auto}
+.pad button{height:52px;border-radius:12px;border:0;background:#555;color:#eee;font-size:20px}
+.pad .u{grid-column:2}.pad .l{grid-column:1;grid-row:2}.pad .d{grid-column:2;grid-row:2}.pad .r{grid-column:3;grid-row:2}
+.who{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:10px}
+.who button{background:none;border:0;color:var(--accent);text-decoration:underline;padding:0}
+ol{margin:6px 0 0;padding-left:20px;font-size:14px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>🐍 SNAKE</h1>
+
+<section id="reg" class="card hide">
+  <p style="margin:0 0 4px">Regístrate con tu celular para jugar.</p>
+  <label for="nm">Nombre</label>
+  <input id="nm" type="text" autocomplete="name" maxlength="30" placeholder="Tu nombre">
+  <label for="ph">Celular (10 dígitos)</label>
+  <input id="ph" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="14" placeholder="3001234567">
+  <label class="chk"><input id="ok" type="checkbox"> <span>Autorizo el tratamiento de mis datos personales para fines del juego.</span></label>
+  <div id="err" class="err" role="alert"></div>
+  <button id="go" class="btn">Registrarme y jugar</button>
+</section>
+
+<section id="game" class="hide">
+  <div class="who"><span id="hi"></span><button id="out">Salir</button></div>
+  <div class="phone">
+    <div class="lcd">
+      <div class="hud"><span>PUNTOS <b id="sc">0</b></span><span>MEJOR <b id="bs">0</b></span></div>
+      <canvas id="cv" width="320" height="320"></canvas>
+    </div>
+  </div>
+  <div class="pad">
+    <button class="u" data-d="U" aria-label="Arriba">▲</button>
+    <button class="l" data-d="L" aria-label="Izquierda">◀</button>
+    <button class="d" data-d="D" aria-label="Abajo">▼</button>
+    <button class="r" data-d="R" aria-label="Derecha">▶</button>
+  </div>
+  <p style="text-align:center;font-size:13px;margin:12px 0 0">Flechas / WASD, o desliza. Toca el juego para iniciar.</p>
+  <div class="card" style="margin-top:14px"><strong>Top 5</strong><ol id="top"><li>—</li></ol></div>
+</section>
+</main>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var me=null,db=null,uid=null,best=0;
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){}return null}
+function rm(k){try{localStorage.removeItem(k)}catch(e){}}
+
+/* ---------- Registro ---------- */
+function show(){
+  $('reg').classList.toggle('hide',!!me);
+  $('game').classList.toggle('hide',!me);
+  if(me){$('hi').textContent='Jugador: '+me.name;best=+ls('snk_best')||0;$('bs').textContent=best;reset()}
+}
+$('go').onclick=async function(){
+  var n=$('nm').value.trim(),p=$('ph').value.replace(/[\s\-().]/g,'').replace(/^\+?57/,'');
+  if(n.length<2){return $('err').textContent='Escribe tu nombre.'}
+  if(!/^3\d{9}$/.test(p)){return $('err').textContent='Ingresa un celular colombiano válido de 10 dígitos (empieza por 3).'}
+  if(!$('ok').checked){return $('err').textContent='Debes aceptar el tratamiento de datos.'}
+  $('err').textContent='';
+  me={name:n,phone:p};
+  ls('snk_me',JSON.stringify(me));
+  try{if(db&&uid)await db.collection('players').doc(uid).set({name:n,phone:p,at:Date.now()})}catch(e){}
+  show();
+};
+$('out').onclick=function(){rm('snk_me');me=null;show()};
+try{var s=ls('snk_me');if(s)me=JSON.parse(s)}catch(e){}
+
+/* ---------- Juego ---------- */
+var N=16,C=20,cv=$('cv'),x=cv.getContext('2d');
+var sn,dir,nd,food,score,run,timer,dead;
+function reset(){
+  sn=[{x:8,y:8},{x:7,y:8},{x:6,y:8}];dir=nd='R';score=0;run=false;dead=false;
+  clearInterval(timer);place();$('sc').textContent=0;draw();
+}
+function place(){do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)}}while(sn.some(function(s){return s.x==food.x&&s.y==food.y}))}
+function ink(){return getComputedStyle(document.documentElement).getPropertyValue('--ink')||'#1b2a0f'}
+function draw(){
+  x.fillStyle='#9bb77a';x.fillRect(0,0,320,320);
+  x.fillStyle='#1b2a0f';
+  sn.forEach(function(s){x.fillRect(s.x*C+1,s.y*C+1,C-2,C-2)});
+  x.fillRect(food.x*C+6,food.y*C+2,C-12,C-4);x.fillRect(food.x*C+2,food.y*C+6,C-4,C-12);
+  if(dead){x.font='bold 28px ui-monospace,monospace';x.textAlign='center';x.fillStyle='#9bb77a';x.fillRect(30,120,260,80);
+    x.fillStyle='#1b2a0f';x.fillText('FIN DEL JUEGO',160,155);x.font='bold 14px ui-monospace,monospace';x.fillText('Toca para reiniciar',160,182)}
+  else if(!run){x.font='bold 14px ui-monospace,monospace';x.textAlign='center';x.fillText('Toca o presiona una flecha',160,40)}
+}
+function tick(){
+  dir=nd;var h={x:sn[0].x+(dir=='R')-(dir=='L'),y:sn[0].y+(dir=='D')-(dir=='U')};
+  if(h.x<0||h.y<0||h.x>=N||h.y>=N||sn.some(function(s){return s.x==h.x&&s.y==h.y})){return over()}
+  sn.unshift(h);
+  if(h.x==food.x&&h.y==food.y){score+=10;$('sc').textContent=score;place();speed()}else sn.pop();
+  draw();
+}
+function speed(){clearInterval(timer);timer=setInterval(tick,Math.max(60,140-Math.floor(score/30)*10))}
+function start(){if(run)return;if(dead)reset();run=true;speed()}
+function over(){
+  clearInterval(timer);run=false;dead=true;draw();
+  if(score>best){best=score;ls('snk_best',best);$('bs').textContent=best;save()}
+}
+async function save(){try{if(db&&uid)await db.collection('scores').doc(uid).set({name:me.name,best:best})}catch(e){}}
+function turn(d){
+  var o={U:'D',D:'U',L:'R',R:'L'};
+  if(d!=o[dir]){nd=d}
+  start();
+}
+document.addEventListener('keydown',function(e){
+  if(!me)return;var m={ArrowUp:'U',ArrowDown:'D',ArrowLeft:'L',ArrowRight:'R',w:'U',s:'D',a:'L',d:'R'}[e.key];
+  if(m&&document.activeElement.tagName!='INPUT'){e.preventDefault();turn(m)}
+});
+document.querySelectorAll('.pad button').forEach(function(b){b.onclick=function(){turn(b.dataset.d)}});
+var t0=null;
+cv.addEventListener('touchstart',function(e){t0=e.touches[0]},{passive:true});
+cv.addEventListener('touchend',function(e){
+  var t=e.changedTouches[0];if(!t0)return;var dx=t.clientX-t0.clientX,dy=t.clientY-t0.clientY;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20){start()}
+  else turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'R':'L'):(dy>0?'D':'U'));
+  t0=null;
+},{passive:true});
+cv.addEventListener('click',start);
+
+/* ---------- Ranking compartido (opcional) ---------- */
+function board(){
+  try{
+    db.collection('scores').orderBy('best','desc').limit(5).onSnapshot(function(s){
+      var ol=$('top');ol.textContent='';
+      if(!s.docs.length){var li=document.createElement('li');li.textContent='—';ol.appendChild(li)}
+      s.docs.forEach(function(d){var v=d.data()||{};var li=document.createElement('li');li.textContent=(v.name||'Jugador')+' — '+(v.best||0);ol.appendChild(li)});
+    },function(){});
+  }catch(e){}
+}
+show();
+(async function(){
+  try{
+    if(!window.claude||!claude.use)return;
+    var u=await claude.use('user');db=await claude.use('db');
+    if(u&&db){uid=await u.id();board();
+      if(me){try{await db.collection('players').doc(uid).set({name:me.name,phone:me.phone,at:Date.now()})}catch(e){}}
+    }
+  }catch(e){}
+})();
+})();
+</script>
+</body>
+</html>
