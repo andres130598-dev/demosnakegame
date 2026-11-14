@@ -64,14 +64,15 @@ ol{margin:6px 0 0;padding-left:20px;font-size:14px}
     <button class="r" data-d="R" aria-label="Derecha">▶</button>
   </div>
   <p style="text-align:center;font-size:13px;margin:12px 0 0">Flechas / WASD, o desliza. Toca el juego para iniciar.</p>
-  <div class="card" style="margin-top:14px"><strong>Top 5</strong><ol id="top"><li>—</li></ol></div>
 </section>
 </main>
 
 <script>
 (function(){
 var $=function(i){return document.getElementById(i)};
-var me=null,db=null,uid=null,best=0;
+var SB_URL='https://zvqfhyerhlurnjytugmt.supabase.co';
+var SB_KEY='sb_publishable_vQq37P01QG_VT4fOx7MPqw_MZ-vxbvn';
+var me=null,best=0;
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){}return null}
 function rm(k){try{localStorage.removeItem(k)}catch(e){}}
 
@@ -87,9 +88,18 @@ $('go').onclick=async function(){
   if(!/^3\d{9}$/.test(p)){return $('err').textContent='Ingresa un celular colombiano válido de 10 dígitos (empieza por 3).'}
   if(!$('ok').checked){return $('err').textContent='Debes aceptar el tratamiento de datos.'}
   $('err').textContent='';
-  me={name:n,phone:p};
-  ls('snk_me',JSON.stringify(me));
-  try{if(db&&uid)await db.collection('players').doc(uid).set({name:n,phone:p,at:Date.now()})}catch(e){}
+  var btn=$('go');btn.disabled=true;btn.textContent='Registrando...';
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/registros',{method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({nombre:n,celular:p})});
+    if(!r.ok&&r.status!==409){throw new Error('http '+r.status)}
+  }catch(e){
+    btn.disabled=false;btn.textContent='Registrarme y jugar';
+    return $('err').textContent='No pudimos registrarte. Revisa tu conexión e intenta de nuevo.';
+  }
+  btn.disabled=false;btn.textContent='Registrarme y jugar';
+  me={name:n,phone:p};ls('snk_me',JSON.stringify(me));
   show();
 };
 $('out').onclick=function(){rm('snk_me');me=null;show()};
@@ -126,7 +136,7 @@ function over(){
   clearInterval(timer);run=false;dead=true;draw();
   if(score>best){best=score;ls('snk_best',best);$('bs').textContent=best;save()}
 }
-async function save(){try{if(db&&uid)await db.collection('scores').doc(uid).set({name:me.name,best:best})}catch(e){}}
+function save(){}
 function turn(d){
   var o={U:'D',D:'U',L:'R',R:'L'};
   if(d!=o[dir]){nd=d}
@@ -147,26 +157,7 @@ cv.addEventListener('touchend',function(e){
 },{passive:true});
 cv.addEventListener('click',start);
 
-/* ---------- Ranking compartido (opcional) ---------- */
-function board(){
-  try{
-    db.collection('scores').orderBy('best','desc').limit(5).onSnapshot(function(s){
-      var ol=$('top');ol.textContent='';
-      if(!s.docs.length){var li=document.createElement('li');li.textContent='—';ol.appendChild(li)}
-      s.docs.forEach(function(d){var v=d.data()||{};var li=document.createElement('li');li.textContent=(v.name||'Jugador')+' — '+(v.best||0);ol.appendChild(li)});
-    },function(){});
-  }catch(e){}
-}
 show();
-(async function(){
-  try{
-    if(!window.claude||!claude.use)return;
-    var u=await claude.use('user');db=await claude.use('db');
-    if(u&&db){uid=await u.id();board();
-      if(me){try{await db.collection('players').doc(uid).set({name:me.name,phone:me.phone,at:Date.now()})}catch(e){}}
-    }
-  }catch(e){}
-})();
 })();
 </script>
 </body>
