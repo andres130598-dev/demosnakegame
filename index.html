@@ -134,9 +134,15 @@ function speed(){clearInterval(timer);timer=setInterval(tick,Math.max(60,140-Mat
 function start(){if(run)return;if(dead)reset();run=true;speed()}
 function over(){
   clearInterval(timer);run=false;dead=true;draw();
-  if(score>best){best=score;ls('snk_best',best);$('bs').textContent=best;save()}
+  if(score>best){best=score;ls('snk_best',best);$('bs').textContent=best}
+  save(score);
 }
-function save(){}
+function save(sc){
+  if(!me||!sc)return;
+  fetch(SB_URL+'/rest/v1/rpc/guardar_puntaje',{method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({p_celular:me.phone,p_puntaje:sc})}).catch(function(){});
+}
 function turn(d){
   var o={U:'D',D:'U',L:'R',R:'L'};
   if(d!=o[dir]){nd=d}
